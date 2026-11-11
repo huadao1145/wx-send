@@ -1,0 +1,22 @@
+# 运行产物
+*.tmp
+_screenshot*.png
+wx-*.png
+desk-*.png
+_state.png
+_hdr*.png
+_after*.png
+_ctrlf.png
+_probe*.txt
+_wxtest*.txt
+
+# 编辑器 / 系统
+.vs/
+.vscode/
+*.swp
+Thumbs.db
+desktop.ini
+
+# 任意下划线开头的临时截图
+_*.png
+_*.txt
