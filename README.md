@@ -1,5 +1,7 @@
 # wx-send
 
+[![lint](https://github.com/huadao1145/wx-send/actions/workflows/lint.yml/badge.svg)](https://github.com/huadao1145/wx-send/actions/workflows/lint.yml)
+
 **一条命令，把本地文件或图片通过 Windows 微信桌面版发给任意会话。**
 会话身份用系统 OCR 双重校验，认不准就中止 —— 宁可不发，也不发错人。
 

@@ -1,0 +1,80 @@
+name: lint
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  powershell:
+    name: PowerShell 静态检查
+    runs-on: windows-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      # 只依赖 PowerShell 自带的能力，不装任何模块也能跑
+      - name: 语法检查
+        shell: pwsh
+        run: |
+          $files = @(Get-ChildItem -Path . -Recurse -Filter '*.ps1' -File)
+          if ($files.Count -eq 0) {
+            Write-Host '::error::没有找到任何 .ps1 文件'
+            exit 1
+          }
+          $failed = $false
+          foreach ($f in $files) {
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile(
+              $f.FullName, [ref]$null, [ref]$errors) | Out-Null
+            if ($errors.Count -gt 0) {
+              $failed = $true
+              $rel = [System.IO.Path]::GetRelativePath((Get-Location).Path, $f.FullName)
+              foreach ($e in $errors) {
+                Write-Host "::error file=$rel,line=$($e.Extent.StartLineNumber)::$($e.Message)"
+              }
+              Write-Host "FAIL $rel ($($errors.Count) 处语法错误)"
+            }
+            else {
+              Write-Host "OK   $([System.IO.Path]::GetRelativePath((Get-Location).Path, $f.FullName))"
+            }
+          }
+          if ($failed) {
+            Write-Host '::error::存在语法错误'
+            exit 1
+          }
+
+      # Windows PowerShell 5.1 会把无 BOM 的 UTF-8 当 ANSI，
+      # 中文注释一旦读坏，param 块会跟着失效。这条守住 BOM。
+      - name: UTF-8 BOM 检查
+        shell: pwsh
+        run: |
+          $failed = $false
+          foreach ($f in Get-ChildItem -Path . -Recurse -Filter '*.ps1' -File) {
+            $bytes = [System.IO.File]::ReadAllBytes($f.FullName)
+            $hasBom = $bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF
+            if (-not $hasBom) {
+              $failed = $true
+              $rel = [System.IO.Path]::GetRelativePath((Get-Location).Path, $f.FullName)
+              Write-Host "::error file=$rel::缺少 UTF-8 BOM，PowerShell 5.1 会把中文读成乱码"
+            }
+          }
+          if ($failed) { exit 1 }
+          Write-Host '全部 .ps1 均为 UTF-8 with BOM'
+
+      - name: PSScriptAnalyzer
+        shell: pwsh
+        run: |
+          Set-PSRepository -Name PSGallery -InstallationPolicy Trusted -ErrorAction SilentlyContinue
+          Install-Module PSScriptAnalyzer -Scope CurrentUser -Force -ErrorAction Stop
+          $results = @(Invoke-ScriptAnalyzer -Path . -Recurse -Severity Error)
+          if ($results.Count -gt 0) {
+            $results | Format-Table -AutoSize | Out-String | Write-Host
+            Write-Host "::error::PSScriptAnalyzer 报出 $($results.Count) 个错误"
+            exit 1
+          }
+          Write-Host 'PSScriptAnalyzer: 无 Error 级问题'
